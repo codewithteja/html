@@ -201,18 +201,14 @@ public class DefaultLifecycleRegistry
 
         @Override
         public Collection<Phase> phases() {
-            return asList(
-                    phase("pre-clean"),
-                    phase(
-                            "clean",
-                            plugin("org.apache.maven.plugins:maven-clean-plugin:" + MAVEN_CLEAN_PLUGIN_VERSION
-                                    + ":clean")),
-                    phase("post-clean"));
+            return singleton(phase(
+                    "clean",
+                    plugin("org.apache.maven.plugins:maven-clean-plugin:" + MAVEN_CLEAN_PLUGIN_VERSION + ":clean")));
         }
 
         @Override
         public Collection<Alias> aliases() {
-            return emptyList();
+            return asList(alias("pre-clean", PRE + "clean"), alias("post-clean", POST + "clean"));
         }
     }
 
@@ -224,33 +220,89 @@ public class DefaultLifecycleRegistry
 
         @Override
         public Collection<Phase> phases() {
-            return asList(
-                    phase("validate"),
-                    phase("initialize"),
-                    phase("generate-sources"),
-                    phase("process-sources"),
-                    phase("generate-resources"),
-                    phase("process-resources"),
-                    phase("compile"),
-                    phase("process-classes"),
-                    phase("generated-test-resources"),
-                    phase("process-test-resources"),
-                    phase("test-compile"),
-                    phase("process-test-classes"),
-                    phase("test"),
-                    phase("prepare-package"),
-                    phase("package"),
-                    phase("pre-integration-test"),
-                    phase("integration-test"),
-                    phase("post-integration-test"),
-                    phase("verify"),
-                    phase("install"),
-                    phase("deploy"));
+            return asList(phase(
+                    "all",
+                    phase(
+                            "build",
+                            phase("initialize", phase("validate")),
+                            phase("sources", after("initialize")),
+                            phase("resources", after("initialize")),
+                            phase("compile", after("resources"), dependencies("compile", READY)),
+                            phase(READY, after("compile")),
+                            phase(PACKAGE, after(READY), dependencies("runtime", PACKAGE))),
+                    phase(
+                            "verify",
+                            phase(
+                                    "unit-test",
+                                    phase("test-sources"),
+                                    phase("test-resources"),
+                                    phase(
+                                            "test-compile",
+                                            after("test-sources"),
+                                            after(READY),
+                                            dependencies("test-only", READY)),
+                                    phase(
+                                            "test",
+                                            after("test-compile"),
+                                            after("test-resources"),
+                                            dependencies("test", READY))),
+                            phase("integration-test", after(PACKAGE))),
+                    phase("install", after("verify")), // TODO: this should be after("package")
+                    phase("deploy", after("install")))); // TODO: this should be after("package")
         }
 
         @Override
         public Collection<Alias> aliases() {
-            return emptyList();
+            return asList(
+                    alias("generate-sources", RUN + "sources"),
+                    alias("process-sources", POST + "sources"),
+                    alias("generate-resources", RUN + "resources"),
+                    alias("process-resources", POST + "resources"),
+                    alias("process-classes", POST + "compile"),
+                    alias("generate-test-sources", RUN + "test-sources"),
+                    alias("process-test-resources", POST + "test-resources"),
+                    alias("generate-test-resources", "run:test-resources"),
+                    alias("process-test-sources", POST + "test-sources"),
+                    alias("process-test-classes", POST + "test-compile"),
+                    alias("prepare-package", PRE + PACKAGE),
+                    alias("pre-integration-test", PRE + "integration-test"),
+                    alias("post-integration-test", POST + "integration-test"));
+        }
+
+        @Override
+        public Optional<List<String>> orderedPhases() {
+            return Optional.of(Arrays.asList(
+                    "validate",
+                    "initialize",
+                    "generate-sources",
+                    "process-sources",
+                    "sources",
+                    "generate-resources",
+                    "process-resources",
+                    "resources",
+                    "compile",
+                    "process-classes",
+                    READY,
+                    "generate-test-sources",
+                    "process-test-sources",
+                    "test-sources",
+                    "generate-test-resources",
+                    "process-test-resources",
+                    "test-resources",
+                    "test-compile",
+                    "process-test-classes",
+                    "test",
+                    "unit-test",
+                    "prepare-package",
+                    PACKAGE,
+                    "build",
+                    "pre-integration-test",
+                    "integration-test",
+                    "post-integration-test",
+                    "verify",
+                    "install",
+                    "deploy",
+                    "all"));
         }
     }
 
@@ -266,12 +318,10 @@ public class DefaultLifecycleRegistry
         @Override
         public Collection<Phase> phases() {
             return asList(
-                    phase("pre-site"),
                     phase(
                             "site",
                             plugin("org.apache.maven.plugins:maven-site-plugin:" + MAVEN_SITE_PLUGIN_VERSION
                                     + ":site")),
-                    phase("post-site"),
                     phase(
                             "site-deploy",
                             after("site"),
@@ -281,7 +331,7 @@ public class DefaultLifecycleRegistry
 
         @Override
         public Collection<Alias> aliases() {
-            return emptyList();
+            return asList(alias("pre-site", PRE + "site"), alias("post-site", POST + "site"));
         }
     }
 
