@@ -118,6 +118,13 @@ public class MojoExecutionScope implements Scope, MojoExecutionListener {
         return (Provider<T>) SEEDED_KEY_PROVIDER;
     }
 
+    public static <T> Provider<T> seededKeyProvider(Class<? extends T> clazz) {
+        return () -> {
+            throw new IllegalStateException(
+                    "No instance of " + clazz.getName() + " is bound to the mojo execution scope.");
+        };
+    }
+
     public void beforeMojoExecution(MojoExecutionEvent event) throws MojoExecutionException {
         for (WeakMojoExecutionListener provided : getProvidedListeners()) {
             provided.beforeMojoExecution(event);
