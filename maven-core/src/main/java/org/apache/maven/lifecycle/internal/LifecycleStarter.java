@@ -40,9 +40,6 @@ import org.slf4j.LoggerFactory;
 /**
  * Starts the build life cycle
  *
- * @author Jason van Zyl
- * @author Benjamin Bentmann
- * @author Kristian Rosenvold
  */
 @Named
 @Singleton
@@ -61,8 +58,6 @@ public class LifecycleStarter {
 
     private final Map<String, Builder> builders;
 
-    private final SessionScope sessionScope;
-
     @Inject
     public LifecycleStarter(
             ExecutionEventCatapult eventCatapult,
@@ -78,7 +73,6 @@ public class LifecycleStarter {
         this.lifecycleDebugLogger = lifecycleDebugLogger;
         this.lifecycleTaskSegmentCalculator = lifecycleTaskSegmentCalculator;
         this.builders = builders;
-        this.sessionScope = sessionScope;
     }
 
     public void execute(MavenSession session) {

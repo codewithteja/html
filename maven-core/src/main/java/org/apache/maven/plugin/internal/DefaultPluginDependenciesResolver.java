@@ -32,7 +32,6 @@ import org.apache.maven.RepositoryUtils;
 import org.apache.maven.model.Dependency;
 import org.apache.maven.model.Plugin;
 import org.apache.maven.plugin.PluginResolutionException;
-import org.codehaus.plexus.util.StringUtils;
 import org.eclipse.aether.DefaultRepositorySystemSession;
 import org.eclipse.aether.RepositorySystem;
 import org.eclipse.aether.RepositorySystemSession;
@@ -52,6 +51,7 @@ import org.eclipse.aether.resolution.ArtifactRequest;
 import org.eclipse.aether.resolution.ArtifactResolutionException;
 import org.eclipse.aether.resolution.DependencyRequest;
 import org.eclipse.aether.resolution.DependencyResolutionException;
+import org.eclipse.aether.resolution.DependencyResult;
 import org.eclipse.aether.util.artifact.JavaScopes;
 import org.eclipse.aether.util.filter.AndDependencyFilter;
 import org.eclipse.aether.util.filter.ScopeDependencyFilter;
@@ -66,7 +66,6 @@ import org.slf4j.LoggerFactory;
  * deleted without prior notice.
  *
  * @since 3.0
- * @author Benjamin Bentmann
  */
 @Named
 @Singleton
@@ -77,9 +76,13 @@ public class DefaultPluginDependenciesResolver implements PluginDependenciesReso
 
     private final RepositorySystem repoSystem;
 
+    private final List<MavenPluginDependenciesValidator> dependenciesValidators;
+
     @Inject
-    public DefaultPluginDependenciesResolver(RepositorySystem repoSystem) {
+    public DefaultPluginDependenciesResolver(
+            RepositorySystem repoSystem, List<MavenPluginDependenciesValidator> dependenciesValidators) {
         this.repoSystem = repoSystem;
+        this.dependenciesValidators = dependenciesValidators;
     }
 
     private Artifact toArtifact(Plugin plugin, RepositorySystemSession session) {
@@ -107,16 +110,21 @@ public class DefaultPluginDependenciesResolver implements PluginDependenciesReso
             request.setTrace(trace);
             ArtifactDescriptorResult result = repoSystem.readArtifactDescriptor(pluginSession, request);
 
+            for (MavenPluginDependenciesValidator dependenciesValidator : dependenciesValidators) {
+                dependenciesValidator.validate(session, pluginArtifact, result);
+            }
+
             pluginArtifact = result.getArtifact();
 
-            if (logger.isWarnEnabled()) {
-                if (!result.getRelocations().isEmpty()) {
-                    String message = pluginArtifact instanceof org.apache.maven.repository.internal.RelocatedArtifact
-                            ? ((org.apache.maven.repository.internal.RelocatedArtifact) pluginArtifact).getMessage()
-                            : null;
-                    logger.warn("The artifact " + result.getRelocations().get(0) + " has been relocated to "
-                            + pluginArtifact + (message != null ? ": " + message : ""));
-                }
+            if (logger.isWarnEnabled() && !result.getRelocations().isEmpty()) {
+                String message = pluginArtifact instanceof org.apache.maven.repository.internal.RelocatedArtifact
+                        ? ": " + ((org.apache.maven.repository.internal.RelocatedArtifact) pluginArtifact).getMessage()
+                        : "";
+                logger.warn(
+                        "The artifact {} has been relocated to {}{}",
+                        result.getRelocations().get(0),
+                        pluginArtifact,
+                        message);
             }
 
             String requiredMavenVersion = (String) result.getProperties().get("prerequisites.maven");
@@ -143,7 +151,7 @@ public class DefaultPluginDependenciesResolver implements PluginDependenciesReso
     /**
      * @since 3.3.0
      */
-    public DependencyNode resolveCoreExtension(
+    public DependencyResult resolveCoreExtension(
             Plugin plugin,
             DependencyFilter dependencyFilter,
             List<RemoteRepository> repositories,
@@ -152,7 +160,7 @@ public class DefaultPluginDependenciesResolver implements PluginDependenciesReso
         return resolveInternal(plugin, null /* pluginArtifact */, dependencyFilter, repositories, session);
     }
 
-    public DependencyNode resolve(
+    public DependencyResult resolvePlugin(
             Plugin plugin,
             Artifact pluginArtifact,
             DependencyFilter dependencyFilter,
@@ -162,7 +170,18 @@ public class DefaultPluginDependenciesResolver implements PluginDependenciesReso
         return resolveInternal(plugin, pluginArtifact, dependencyFilter, repositories, session);
     }
 
-    private DependencyNode resolveInternal(
+    public DependencyNode resolve(
+            Plugin plugin,
+            Artifact pluginArtifact,
+            DependencyFilter dependencyFilter,
+            List<RemoteRepository> repositories,
+            RepositorySystemSession session)
+            throws PluginResolutionException {
+        return resolveInternal(plugin, pluginArtifact, dependencyFilter, repositories, session)
+                .getRoot();
+    }
+
+    private DependencyResult resolveInternal(
             Plugin plugin,
             Artifact pluginArtifact,
             DependencyFilter dependencyFilter,
@@ -210,14 +229,12 @@ public class DefaultPluginDependenciesResolver implements PluginDependenciesReso
             }
 
             depRequest.setRoot(node);
-            repoSystem.resolveDependencies(session, depRequest);
+            return repoSystem.resolveDependencies(session, depRequest);
         } catch (DependencyCollectionException e) {
             throw new PluginResolutionException(plugin, e);
         } catch (DependencyResolutionException e) {
             throw new PluginResolutionException(plugin, e.getCause());
         }
-
-        return node;
     }
 
     // Keep this class in sync with org.apache.maven.project.DefaultProjectDependenciesResolver.GraphLogger
@@ -233,7 +250,7 @@ public class DefaultPluginDependenciesResolver implements PluginDependenciesReso
                 org.eclipse.aether.artifact.Artifact art = dep.getArtifact();
 
                 buffer.append(art);
-                if (StringUtils.isNotEmpty(dep.getScope())) {
+                if (dep.getScope() != null && !dep.getScope().isEmpty()) {
                     buffer.append(':').append(dep.getScope());
                 }
 

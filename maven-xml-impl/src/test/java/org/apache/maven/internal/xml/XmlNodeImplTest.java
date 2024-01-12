@@ -18,7 +18,11 @@
  */
 package org.apache.maven.internal.xml;
 
+import javax.xml.stream.XMLStreamException;
+import javax.xml.stream.XMLStreamReader;
+
 import java.io.IOException;
+import java.io.Reader;
 import java.io.StringReader;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -29,8 +33,6 @@ import java.util.stream.Collectors;
 import org.apache.maven.api.xml.XmlNode;
 import org.codehaus.plexus.util.xml.Xpp3Dom;
 import org.codehaus.plexus.util.xml.Xpp3DomBuilder;
-import org.codehaus.plexus.util.xml.pull.XmlPullParser;
-import org.codehaus.plexus.util.xml.pull.XmlPullParserException;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -39,10 +41,10 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
-public class XmlNodeImplTest {
+class XmlNodeImplTest {
 
     @Test
-    public void testCombineChildrenAppend() throws Exception {
+    void testCombineChildrenAppend() throws Exception {
         String lhs = "<configuration>\n"
                 + "    <plugins>\n"
                 + "        <plugin>\n"
@@ -154,7 +156,7 @@ public class XmlNodeImplTest {
      * @throws java.lang.Exception if any.
      */
     @Test
-    public void testCombineId() throws Exception {
+    void testCombineId() throws Exception {
         String lhs = "<props>" + "<property combine.id='LHS-ONLY'><name>LHS-ONLY</name><value>LHS</value></property>"
                 + "<property combine.id='TOOVERWRITE'><name>TOOVERWRITE</name><value>LHS</value></property>"
                 + "</props>";
@@ -200,7 +202,7 @@ public class XmlNodeImplTest {
      * @throws java.lang.Exception if any.
      */
     @Test
-    public void testCombineKeys() throws Exception {
+    void testCombineKeys() throws Exception {
         String lhs = "<props combine.keys='key'>"
                 + "<property key=\"LHS-ONLY\"><name>LHS-ONLY</name><value>LHS</value></property>"
                 + "<property combine.keys='name'><name>TOOVERWRITE</name><value>LHS</value></property>" + "</props>";
@@ -241,7 +243,7 @@ public class XmlNodeImplTest {
     }
 
     @Test
-    public void testPreserveDominantBlankValue() throws XmlPullParserException, IOException {
+    void testPreserveDominantBlankValue() throws XMLStreamException, IOException {
         String lhs = "<parameter xml:space=\"preserve\"> </parameter>";
 
         String rhs = "<parameter>recessive</parameter>";
@@ -254,7 +256,7 @@ public class XmlNodeImplTest {
     }
 
     @Test
-    public void testPreserveDominantEmptyNode() throws XmlPullParserException, IOException {
+    void testPreserveDominantEmptyNode() throws XMLStreamException, IOException {
         String lhs = "<parameter></parameter>";
 
         String rhs = "<parameter>recessive</parameter>";
@@ -267,7 +269,7 @@ public class XmlNodeImplTest {
     }
 
     @Test
-    public void testPreserveDominantEmptyNode2() throws XmlPullParserException, IOException {
+    void testPreserveDominantEmptyNode2() throws XMLStreamException, IOException {
         String lhs = "<parameter/>";
 
         String rhs = "<parameter>recessive</parameter>";
@@ -283,7 +285,7 @@ public class XmlNodeImplTest {
      * <p>testShouldPerformAppendAtFirstSubElementLevel.</p>
      */
     @Test
-    public void testShouldPerformAppendAtFirstSubElementLevel() {
+    void testShouldPerformAppendAtFirstSubElementLevel() {
         // create the dominant DOM
         Xpp3Dom t1 = new Xpp3Dom("top");
         t1.setAttribute(Xpp3Dom.CHILDREN_COMBINATION_MODE_ATTRIBUTE, Xpp3Dom.CHILDREN_COMBINATION_APPEND);
@@ -321,7 +323,7 @@ public class XmlNodeImplTest {
      * <p>testShouldOverrideAppendAndDeepMerge.</p>
      */
     @Test
-    public void testShouldOverrideAppendAndDeepMerge() {
+    void testShouldOverrideAppendAndDeepMerge() {
         // create the dominant DOM
         Xpp3Dom t1 = new Xpp3Dom("top");
         t1.setAttribute(Xpp3Dom.CHILDREN_COMBINATION_MODE_ATTRIBUTE, Xpp3Dom.CHILDREN_COMBINATION_APPEND);
@@ -357,7 +359,7 @@ public class XmlNodeImplTest {
      * <p>testShouldPerformSelfOverrideAtTopLevel.</p>
      */
     @Test
-    public void testShouldPerformSelfOverrideAtTopLevel() {
+    void testShouldPerformSelfOverrideAtTopLevel() {
         // create the dominant DOM
         Xpp3Dom t1 = new Xpp3Dom("top");
         t1.setAttribute("attr", "value");
@@ -383,7 +385,7 @@ public class XmlNodeImplTest {
      * <p>testShouldMergeValuesAtTopLevelByDefault.</p>
      */
     @Test
-    public void testShouldNotMergeValuesAtTopLevelByDefault() {
+    void testShouldNotMergeValuesAtTopLevelByDefault() {
         // create the dominant DOM
         Xpp3Dom t1 = new Xpp3Dom("top");
         t1.setAttribute("attr", "value");
@@ -409,7 +411,7 @@ public class XmlNodeImplTest {
      * <p>testShouldMergeValuesAtTopLevel.</p>
      */
     @Test
-    public void testShouldNotMergeValuesAtTopLevel() {
+    void testShouldNotMergeValuesAtTopLevel() {
         // create the dominant DOM
         Xpp3Dom t1 = new Xpp3Dom("top");
         t1.setAttribute("attr", "value");
@@ -432,7 +434,7 @@ public class XmlNodeImplTest {
      * <p>testEquals.</p>
      */
     @Test
-    public void testEquals() {
+    void testEquals() {
         XmlNodeImpl dom = new XmlNodeImpl("top");
 
         assertEquals(dom, dom);
@@ -442,14 +444,11 @@ public class XmlNodeImplTest {
 
     /**
      * <p>testEqualsIsNullSafe.</p>
-     *
-     * @throws org.codehaus.plexus.util.xml.pull.XmlPullParserException if any.
-     * @throws java.io.IOException if any.
      */
     @Test
-    public void testEqualsIsNullSafe() throws XmlPullParserException, IOException {
+    void testEqualsIsNullSafe() throws XMLStreamException, IOException {
         String testDom = "<configuration><items thing='blah'><item>one</item><item>two</item></items></configuration>";
-        Xpp3Dom dom = Xpp3DomBuilder.build(new StringReader(testDom));
+        XmlNode dom = toXmlNode(testDom);
 
         Map<String, String> attributes = new HashMap<>();
         attributes.put("nullValue", null);
@@ -464,19 +463,14 @@ public class XmlNodeImplTest {
 
     /**
      * <p>testShouldOverwritePluginConfigurationSubItemsByDefault.</p>
-     *
-     * @throws org.codehaus.plexus.util.xml.pull.XmlPullParserException if any.
-     * @throws java.io.IOException if any.
      */
     @Test
-    public void testShouldOverwritePluginConfigurationSubItemsByDefault() throws XmlPullParserException, IOException {
+    void testShouldOverwritePluginConfigurationSubItemsByDefault() throws XMLStreamException, IOException {
         String parentConfigStr = "<configuration><items><item>one</item><item>two</item></items></configuration>";
-        XmlNode parentConfig =
-                XmlNodeBuilder.build(new StringReader(parentConfigStr), new FixedInputLocationBuilder("parent"));
+        XmlNode parentConfig = toXmlNode(parentConfigStr, new FixedInputLocationBuilder("parent"));
 
         String childConfigStr = "<configuration><items><item>three</item></items></configuration>";
-        XmlNode childConfig =
-                XmlNodeBuilder.build(new StringReader(childConfigStr), new FixedInputLocationBuilder("child"));
+        XmlNode childConfig = toXmlNode(childConfigStr, new FixedInputLocationBuilder("child"));
 
         XmlNode result = XmlNode.merge(childConfig, parentConfig);
         XmlNode items = result.getChild("items");
@@ -490,21 +484,15 @@ public class XmlNodeImplTest {
 
     /**
      * <p>testShouldMergePluginConfigurationSubItemsWithMergeAttributeSet.</p>
-     *
-     * @throws org.codehaus.plexus.util.xml.pull.XmlPullParserException if any.
-     * @throws java.io.IOException if any.
      */
     @Test
-    public void testShouldMergePluginConfigurationSubItemsWithMergeAttributeSet()
-            throws XmlPullParserException, IOException {
+    void testShouldMergePluginConfigurationSubItemsWithMergeAttributeSet() throws XMLStreamException, IOException {
         String parentConfigStr = "<configuration><items><item>one</item><item>two</item></items></configuration>";
-        XmlNode parentConfig =
-                XmlNodeBuilder.build(new StringReader(parentConfigStr), new FixedInputLocationBuilder("parent"));
+        XmlNode parentConfig = toXmlNode(parentConfigStr, new FixedInputLocationBuilder("parent"));
 
         String childConfigStr =
                 "<configuration><items combine.children=\"append\"><item>three</item></items></configuration>";
-        XmlNode childConfig =
-                XmlNodeBuilder.build(new StringReader(childConfigStr), new FixedInputLocationBuilder("child"));
+        XmlNode childConfig = toXmlNode(childConfigStr, new FixedInputLocationBuilder("child"));
 
         XmlNode result = XmlNode.merge(childConfig, parentConfig);
         XmlNode items = result.getChild("items");
@@ -525,7 +513,7 @@ public class XmlNodeImplTest {
      * @throws java.lang.Exception if any.
      */
     @Test
-    public void testShouldNotChangeUponMergeWithItselfWhenFirstOrLastSubItemIsEmpty() throws Exception {
+    void testShouldNotChangeUponMergeWithItselfWhenFirstOrLastSubItemIsEmpty() throws Exception {
         String configStr = "<configuration><items><item/><item>test</item><item/></items></configuration>";
         Xpp3Dom dominantConfig = Xpp3DomBuilder.build(new StringReader(configStr));
         Xpp3Dom recessiveConfig = Xpp3DomBuilder.build(new StringReader(configStr));
@@ -546,7 +534,7 @@ public class XmlNodeImplTest {
      * @throws java.lang.Exception if any.
      */
     @Test
-    public void testShouldCopyRecessiveChildrenNotPresentInTarget() throws Exception {
+    void testShouldCopyRecessiveChildrenNotPresentInTarget() throws Exception {
         String dominantStr = "<configuration><foo>x</foo></configuration>";
         String recessiveStr = "<configuration><bar>y</bar></configuration>";
         Xpp3Dom dominantConfig = Xpp3DomBuilder.build(new StringReader(dominantStr));
@@ -563,14 +551,11 @@ public class XmlNodeImplTest {
 
     /**
      * <p>testDupeChildren.</p>
-     *
-     * @throws java.io.IOException if any.
-     * @throws org.codehaus.plexus.util.xml.pull.XmlPullParserException if any.
      */
     @Test
-    public void testDupeChildren() throws IOException, XmlPullParserException {
+    void testDupeChildren() throws IOException, XMLStreamException {
         String dupes = "<configuration><foo>x</foo><foo>y</foo></configuration>";
-        Xpp3Dom dom = Xpp3DomBuilder.build(new StringReader(dupes));
+        XmlNode dom = toXmlNode(new StringReader(dupes));
         assertNotNull(dom);
         assertEquals("y", dom.getChild("foo").getValue());
     }
@@ -581,7 +566,7 @@ public class XmlNodeImplTest {
      * @throws java.lang.Exception if any.
      */
     @Test
-    public void testShouldRemoveEntireElementWithAttributesAndChildren() throws Exception {
+    void testShouldRemoveEntireElementWithAttributesAndChildren() throws Exception {
         String dominantStr = "<config><service combine.self=\"remove\"/></config>";
         String recessiveStr = "<config><service><parameter>parameter</parameter></service></config>";
         Xpp3Dom dominantConfig = Xpp3DomBuilder.build(new StringReader(dominantStr));
@@ -599,7 +584,7 @@ public class XmlNodeImplTest {
      * @throws java.lang.Exception if any.
      */
     @Test
-    public void testShouldRemoveDoNotRemoveTagWhenSwappedInputDOMs() throws Exception {
+    void testShouldRemoveDoNotRemoveTagWhenSwappedInputDOMs() throws Exception {
         String dominantStr = "<config><service combine.self=\"remove\"/></config>";
         String recessiveStr = "<config><service><parameter>parameter</parameter></service></config>";
         Xpp3Dom dominantConfig = Xpp3DomBuilder.build(new StringReader(dominantStr));
@@ -609,6 +594,36 @@ public class XmlNodeImplTest {
         Xpp3Dom result = Xpp3Dom.mergeXpp3Dom(recessiveConfig, dominantConfig);
 
         assertEquals(recessiveConfig.toString(), result.toString());
+    }
+
+    @Test
+    void testMergeCombineChildrenAppendOnRecessive() throws XMLStreamException, IOException {
+        String dominant = "<relocations>\n" + "  <relocation>\n"
+                + "    <pattern>org.apache.shiro.crypto.CipherService</pattern>\n"
+                + "    <shadedPattern>org.apache.shiro.crypto.cipher.CipherService</shadedPattern>\n"
+                + "  </relocation>\n"
+                + "</relocations>";
+        String recessive = "<relocations combine.children=\"append\">\n"
+                + "  <relocation>\n"
+                + "    <pattern>javax.faces</pattern>\n"
+                + "    <shadedPattern>jakarta.faces</shadedPattern>\n"
+                + "  </relocation>\n"
+                + "</relocations>";
+        String expected = "<relocations combine.children=\"append\">\n"
+                + "  <relocation>\n"
+                + "    <pattern>javax.faces</pattern>\n"
+                + "    <shadedPattern>jakarta.faces</shadedPattern>\n"
+                + "  </relocation>\n"
+                + "  <relocation>\n"
+                + "    <pattern>org.apache.shiro.crypto.CipherService</pattern>\n"
+                + "    <shadedPattern>org.apache.shiro.crypto.cipher.CipherService</shadedPattern>\n"
+                + "  </relocation>\n"
+                + "</relocations>";
+
+        XmlNode d = toXmlNode(dominant);
+        XmlNode r = toXmlNode(recessive);
+        XmlNode m = d.merge(r);
+        assertEquals(expected, m.toString().replaceAll("\r\n", "\n"));
     }
 
     private static List<XmlNode> getChildren(XmlNode node, String name) {
@@ -623,23 +638,32 @@ public class XmlNodeImplTest {
                 .orElse(null);
     }
 
-    private static XmlNode toXmlNode(String xml) throws XmlPullParserException, IOException {
+    private static XmlNode toXmlNode(String xml) throws XMLStreamException, IOException {
         return toXmlNode(xml, null);
     }
 
-    private static XmlNode toXmlNode(String xml, XmlNodeBuilder.InputLocationBuilder locationBuilder)
-            throws XmlPullParserException, IOException {
-        return XmlNodeBuilder.build(new StringReader(xml), locationBuilder);
+    private static XmlNode toXmlNode(String xml, XmlNodeBuilder.InputLocationBuilderStax locationBuilder)
+            throws XMLStreamException, IOException {
+        return toXmlNode(new StringReader(xml), locationBuilder);
     }
 
-    private static class FixedInputLocationBuilder implements XmlNodeBuilder.InputLocationBuilder {
+    private static XmlNode toXmlNode(Reader reader) throws XMLStreamException, IOException {
+        return toXmlNode(reader, null);
+    }
+
+    private static XmlNode toXmlNode(Reader reader, XmlNodeBuilder.InputLocationBuilderStax locationBuilder)
+            throws XMLStreamException, IOException {
+        return XmlNodeBuilder.build(reader, locationBuilder);
+    }
+
+    private static class FixedInputLocationBuilder implements XmlNodeBuilder.InputLocationBuilderStax {
         private final Object location;
 
         public FixedInputLocationBuilder(Object location) {
             this.location = location;
         }
 
-        public Object toInputLocation(XmlPullParser parser) {
+        public Object toInputLocation(XMLStreamReader parser) {
             return location;
         }
     }

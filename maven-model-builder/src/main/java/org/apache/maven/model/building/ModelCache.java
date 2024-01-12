@@ -18,6 +18,8 @@
  */
 package org.apache.maven.model.building;
 
+import java.util.function.Supplier;
+
 import org.apache.maven.building.Source;
 
 /**
@@ -27,8 +29,6 @@ import org.apache.maven.building.Source;
  * identify of a model. The tag allows for further classification of the associated data on the sole discretion of the
  * model builder.
  *
- * @author Benjamin Bentmann
- * @author Robert Scholte
  */
 public interface ModelCache {
     /**
@@ -129,4 +129,19 @@ public interface ModelCache {
         Object obj = get(groupId, artifactId, version, tag.getName());
         return (obj != null) ? tag.fromCache(tag.getType().cast(obj)) : null;
     }
+
+    default <T> T computeIfAbsent(
+            String groupId, String artifactId, String version, ModelCacheTag<T> tag, Supplier<Supplier<T>> data) {
+        Object obj = computeIfAbsent(groupId, artifactId, version, tag.getName(), (Supplier) data);
+        return (obj != null) ? tag.fromCache(tag.getType().cast(obj)) : null;
+    }
+
+    default <T> T computeIfAbsent(Source path, ModelCacheTag<T> tag, Supplier<Supplier<T>> data) {
+        Object obj = computeIfAbsent(path, tag.getName(), (Supplier) data);
+        return (obj != null) ? tag.fromCache(tag.getType().cast(obj)) : null;
+    }
+
+    Object computeIfAbsent(String groupId, String artifactId, String version, String tag, Supplier<Supplier<?>> data);
+
+    Object computeIfAbsent(Source path, String tag, Supplier<Supplier<?>> data);
 }

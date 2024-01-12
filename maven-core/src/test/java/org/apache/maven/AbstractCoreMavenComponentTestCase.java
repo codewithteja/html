@@ -29,11 +29,12 @@ import java.util.Properties;
 import org.apache.maven.artifact.Artifact;
 import org.apache.maven.artifact.InvalidRepositoryException;
 import org.apache.maven.artifact.repository.ArtifactRepository;
+import org.apache.maven.bridge.MavenRepositorySystem;
 import org.apache.maven.execution.DefaultMavenExecutionRequest;
 import org.apache.maven.execution.DefaultMavenExecutionResult;
 import org.apache.maven.execution.MavenExecutionRequest;
 import org.apache.maven.execution.MavenSession;
-import org.apache.maven.internal.impl.DefaultSession;
+import org.apache.maven.internal.impl.DefaultSessionFactory;
 import org.apache.maven.model.Build;
 import org.apache.maven.model.Dependency;
 import org.apache.maven.model.Exclusion;
@@ -44,17 +45,17 @@ import org.apache.maven.model.RepositoryPolicy;
 import org.apache.maven.project.DefaultProjectBuildingRequest;
 import org.apache.maven.project.MavenProject;
 import org.apache.maven.project.ProjectBuildingRequest;
-import org.apache.maven.repository.RepositorySystem;
 import org.apache.maven.repository.internal.MavenRepositorySystemUtils;
 import org.codehaus.plexus.PlexusContainer;
 import org.codehaus.plexus.testing.PlexusTest;
 import org.codehaus.plexus.util.FileUtils;
 import org.eclipse.aether.DefaultRepositorySystemSession;
-import org.eclipse.aether.internal.impl.DefaultRepositorySystem;
+import org.eclipse.aether.RepositorySystem;
 import org.eclipse.aether.internal.impl.SimpleLocalRepositoryManagerFactory;
 import org.eclipse.aether.repository.LocalRepository;
 
 import static org.codehaus.plexus.testing.PlexusExtension.getBasedir;
+import static org.mockito.Mockito.mock;
 
 @PlexusTest
 public abstract class AbstractCoreMavenComponentTestCase {
@@ -63,7 +64,7 @@ public abstract class AbstractCoreMavenComponentTestCase {
     protected PlexusContainer container;
 
     @Inject
-    protected RepositorySystem repositorySystem;
+    protected MavenRepositorySystem repositorySystem;
 
     @Inject
     protected org.apache.maven.project.ProjectBuilder projectBuilder;
@@ -145,11 +146,14 @@ public abstract class AbstractCoreMavenComponentTestCase {
 
         initRepoSession(configuration);
 
+        DefaultSessionFactory defaultSessionFactory =
+                new DefaultSessionFactory(mock(RepositorySystem.class), null, null, null);
+
         MavenSession session = new MavenSession(
                 getContainer(), configuration.getRepositorySession(), request, new DefaultMavenExecutionResult());
         session.setProjects(projects);
         session.setAllProjects(session.getProjects());
-        session.setSession(new DefaultSession(session, new DefaultRepositorySystem(), null, null, null, null));
+        session.setSession(defaultSessionFactory.getSession(session));
 
         return session;
     }
@@ -179,7 +183,7 @@ public abstract class AbstractCoreMavenComponentTestCase {
         policy.setUpdatePolicy("always");
 
         Repository repository = new Repository();
-        repository.setId(RepositorySystem.DEFAULT_REMOTE_REPO_ID);
+        repository.setId(MavenRepositorySystem.DEFAULT_REMOTE_REPO_ID);
         repository.setUrl("file://" + repoDir.toURI().getPath());
         repository.setReleases(policy);
         repository.setSnapshots(policy);

@@ -23,11 +23,13 @@ import javax.inject.Named;
 import javax.inject.Singleton;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -41,6 +43,8 @@ import org.apache.maven.api.Session;
 import org.apache.maven.api.model.Model;
 import org.apache.maven.api.model.Prerequisites;
 import org.apache.maven.api.model.Profile;
+import org.apache.maven.api.services.Lookup;
+import org.apache.maven.api.services.LookupException;
 import org.apache.maven.artifact.ArtifactUtils;
 import org.apache.maven.execution.BuildResumptionAnalyzer;
 import org.apache.maven.execution.BuildResumptionDataRepository;
@@ -57,8 +61,8 @@ import org.apache.maven.graph.GraphBuilder;
 import org.apache.maven.graph.ProjectSelector;
 import org.apache.maven.internal.aether.DefaultRepositorySystemSessionFactory;
 import org.apache.maven.internal.aether.MavenChainedWorkspaceReader;
-import org.apache.maven.internal.impl.DefaultSession;
 import org.apache.maven.internal.impl.DefaultSessionFactory;
+import org.apache.maven.internal.impl.InternalSession;
 import org.apache.maven.lifecycle.LifecycleExecutionException;
 import org.apache.maven.lifecycle.internal.ExecutionEventCatapult;
 import org.apache.maven.lifecycle.internal.LifecycleStarter;
@@ -67,13 +71,9 @@ import org.apache.maven.model.building.Result;
 import org.apache.maven.model.superpom.SuperPomProvider;
 import org.apache.maven.plugin.LegacySupport;
 import org.apache.maven.project.MavenProject;
-import org.apache.maven.project.ProjectBuilder;
-import org.apache.maven.repository.LocalRepositoryNotAccessibleException;
 import org.apache.maven.session.scope.internal.SessionScope;
-import org.codehaus.plexus.PlexusContainer;
-import org.codehaus.plexus.component.repository.exception.ComponentLookupException;
-import org.eclipse.aether.DefaultRepositorySystemSession;
 import org.eclipse.aether.RepositorySystemSession;
+import org.eclipse.aether.RepositorySystemSession.CloseableSession;
 import org.eclipse.aether.repository.WorkspaceReader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -82,26 +82,23 @@ import org.slf4j.helpers.MessageFormatter;
 import static java.util.stream.Collectors.toSet;
 
 /**
- * @author Jason van Zyl
  */
 @Named
 @Singleton
 public class DefaultMaven implements Maven {
     private final Logger logger = LoggerFactory.getLogger(getClass());
 
-    protected ProjectBuilder projectBuilder;
+    private final Lookup lookup;
 
-    private LifecycleStarter lifecycleStarter;
+    private final LifecycleStarter lifecycleStarter;
 
-    protected PlexusContainer container;
+    private final ExecutionEventCatapult eventCatapult;
 
-    private ExecutionEventCatapult eventCatapult;
+    private final LegacySupport legacySupport;
 
-    private LegacySupport legacySupport;
+    private final SessionScope sessionScope;
 
-    private SessionScope sessionScope;
-
-    private DefaultRepositorySystemSessionFactory repositorySessionFactory;
+    private final DefaultRepositorySystemSessionFactory repositorySessionFactory;
 
     private final GraphBuilder graphBuilder;
 
@@ -118,9 +115,8 @@ public class DefaultMaven implements Maven {
     @Inject
     @SuppressWarnings("checkstyle:ParameterNumber")
     public DefaultMaven(
-            ProjectBuilder projectBuilder,
+            Lookup lookup,
             LifecycleStarter lifecycleStarter,
-            PlexusContainer container,
             ExecutionEventCatapult eventCatapult,
             LegacySupport legacySupport,
             SessionScope sessionScope,
@@ -130,9 +126,8 @@ public class DefaultMaven implements Maven {
             BuildResumptionDataRepository buildResumptionDataRepository,
             SuperPomProvider superPomProvider,
             DefaultSessionFactory defaultSessionFactory) {
-        this.projectBuilder = projectBuilder;
+        this.lookup = lookup;
         this.lifecycleStarter = lifecycleStarter;
-        this.container = container;
         this.eventCatapult = eventCatapult;
         this.legacySupport = legacySupport;
         this.sessionScope = sessionScope;
@@ -204,7 +199,7 @@ public class DefaultMaven implements Maven {
 
         try {
             validateLocalRepository(request);
-        } catch (LocalRepositoryNotAccessibleException e) {
+        } catch (IOException e) {
             return addExceptionToResult(result, e);
         }
 
@@ -214,18 +209,18 @@ public class DefaultMaven implements Maven {
         // so that @SessionScoped components can be @Injected into AbstractLifecycleParticipants.
         //
         sessionScope.enter();
-        try {
-            DefaultRepositorySystemSession repoSession = (DefaultRepositorySystemSession) newRepositorySession(request);
-            MavenSession session = new MavenSession(container, repoSession, request, result);
+        MavenChainedWorkspaceReader chainedWorkspaceReader = new MavenChainedWorkspaceReader();
+        try (CloseableSession closeableSession = newCloseableSession(request, chainedWorkspaceReader)) {
+            MavenSession session = new MavenSession(closeableSession, request, result);
             session.setSession(defaultSessionFactory.getSession(session));
 
             sessionScope.seed(MavenSession.class, session);
             sessionScope.seed(Session.class, session.getSession());
-            sessionScope.seed(DefaultSession.class, (DefaultSession) session.getSession());
+            sessionScope.seed(InternalSession.class, InternalSession.from(session.getSession()));
 
             legacySupport.setSession(session);
 
-            return doExecute(request, session, result, repoSession);
+            return doExecute(request, session, result, chainedWorkspaceReader);
         } finally {
             sessionScope.exit();
         }
@@ -235,7 +230,7 @@ public class DefaultMaven implements Maven {
             MavenExecutionRequest request,
             MavenSession session,
             MavenExecutionResult result,
-            DefaultRepositorySystemSession repoSession) {
+            MavenChainedWorkspaceReader chainedWorkspaceReader) {
         try {
             afterSessionStart(session);
         } catch (MavenExecutionException e) {
@@ -243,9 +238,9 @@ public class DefaultMaven implements Maven {
         }
 
         try {
-            WorkspaceReader reactorReader = container.lookup(WorkspaceReader.class, ReactorReader.HINT);
-            repoSession.setWorkspaceReader(reactorReader);
-        } catch (ComponentLookupException e) {
+            WorkspaceReader reactorReader = lookup.lookup(WorkspaceReader.class, ReactorReader.HINT);
+            chainedWorkspaceReader.setReaders(Collections.singletonList(reactorReader));
+        } catch (LookupException e) {
             return addExceptionToResult(result, e);
         }
 
@@ -265,11 +260,10 @@ public class DefaultMaven implements Maven {
         }
 
         try {
-            setupWorkspaceReader(session, repoSession);
-        } catch (ComponentLookupException e) {
+            setupWorkspaceReader(session, chainedWorkspaceReader);
+        } catch (LookupException e) {
             return addExceptionToResult(result, e);
         }
-        repoSession.setReadOnly();
         try {
             afterProjectsRead(session);
         } catch (MavenExecutionException e) {
@@ -327,71 +321,56 @@ public class DefaultMaven implements Maven {
             }
         } finally {
             try {
-                afterSessionEnd(session.getProjects(), session);
+                afterSessionEnd(session);
             } catch (MavenExecutionException e) {
-                return addExceptionToResult(result, e);
+                addExceptionToResult(result, e);
             }
         }
 
         return result;
     }
 
-    private void setupWorkspaceReader(MavenSession session, DefaultRepositorySystemSession repoSession)
-            throws ComponentLookupException {
+    private void setupWorkspaceReader(MavenSession session, MavenChainedWorkspaceReader chainedWorkspaceReader) {
         // Desired order of precedence for workspace readers before querying the local artifact repositories
         Set<WorkspaceReader> workspaceReaders = new LinkedHashSet<>();
         // 1) Reactor workspace reader
-        WorkspaceReader reactorReader = container.lookup(WorkspaceReader.class, ReactorReader.HINT);
+        WorkspaceReader reactorReader = lookup.lookup(WorkspaceReader.class, ReactorReader.HINT);
         workspaceReaders.add(reactorReader);
         // 2) Repository system session-scoped workspace reader
-        WorkspaceReader repoWorkspaceReader = repoSession.getWorkspaceReader();
-        if (repoWorkspaceReader != null && repoWorkspaceReader != reactorReader) {
-            workspaceReaders.add(repoWorkspaceReader);
+        for (WorkspaceReader repoWorkspaceReader : chainedWorkspaceReader.getReaders()) {
+            if (repoWorkspaceReader != null && repoWorkspaceReader != reactorReader) {
+                workspaceReaders.add(repoWorkspaceReader);
+            }
         }
         // 3) .. n) Project-scoped workspace readers
         workspaceReaders.addAll(getProjectScopedExtensionComponents(session.getProjects(), WorkspaceReader.class));
-        repoSession.setWorkspaceReader(MavenChainedWorkspaceReader.of(workspaceReaders));
+        chainedWorkspaceReader.setReaders(workspaceReaders);
     }
 
     private void afterSessionStart(MavenSession session) throws MavenExecutionException {
-        // CHECKSTYLE_OFF: LineLength
-        for (AbstractMavenLifecycleParticipant listener :
-                getExtensionComponents(Collections.emptyList(), AbstractMavenLifecycleParticipant.class))
-        // CHECKSTYLE_ON: LineLength
-        {
-            listener.afterSessionStart(session);
-        }
+        callListeners(session, AbstractMavenLifecycleParticipant::afterSessionStart);
     }
 
     private void afterProjectsRead(MavenSession session) throws MavenExecutionException {
-        ClassLoader originalClassLoader = Thread.currentThread().getContextClassLoader();
-        try {
-            // CHECKSTYLE_OFF: LineLength
-            for (AbstractMavenLifecycleParticipant listener :
-                    getExtensionComponents(session.getProjects(), AbstractMavenLifecycleParticipant.class))
-            // CHECKSTYLE_ON: LineLength
-            {
-                Thread.currentThread().setContextClassLoader(listener.getClass().getClassLoader());
-
-                listener.afterProjectsRead(session);
-            }
-        } finally {
-            Thread.currentThread().setContextClassLoader(originalClassLoader);
-        }
+        callListeners(session, AbstractMavenLifecycleParticipant::afterProjectsRead);
     }
 
-    private void afterSessionEnd(Collection<MavenProject> projects, MavenSession session)
-            throws MavenExecutionException {
+    private void afterSessionEnd(MavenSession session) throws MavenExecutionException {
+        callListeners(session, AbstractMavenLifecycleParticipant::afterSessionEnd);
+    }
+
+    @FunctionalInterface
+    interface ListenerMethod {
+        void run(AbstractMavenLifecycleParticipant listener, MavenSession session) throws MavenExecutionException;
+    }
+
+    private void callListeners(MavenSession session, ListenerMethod method) throws MavenExecutionException {
         ClassLoader originalClassLoader = Thread.currentThread().getContextClassLoader();
         try {
-            // CHECKSTYLE_OFF: LineLength
             for (AbstractMavenLifecycleParticipant listener :
-                    getExtensionComponents(projects, AbstractMavenLifecycleParticipant.class))
-            // CHECKSTYLE_ON: LineLength
-            {
+                    getExtensionComponents(session.getProjects(), AbstractMavenLifecycleParticipant.class)) {
                 Thread.currentThread().setContextClassLoader(listener.getClass().getClassLoader());
-
-                listener.afterSessionEnd(session);
+                method.run(listener, session);
             }
         } finally {
             Thread.currentThread().setContextClassLoader(originalClassLoader);
@@ -419,38 +398,46 @@ public class DefaultMaven implements Maven {
         }
     }
 
+    /**
+     * Nobody should ever use this method.
+     *
+     * @deprecated If you use this method and your code is not in Maven Core, stop doing this.
+     */
+    @Deprecated
     public RepositorySystemSession newRepositorySession(MavenExecutionRequest request) {
-        return repositorySessionFactory.newRepositorySession(request);
+        return newCloseableSession(request, new MavenChainedWorkspaceReader());
     }
 
-    private void validateLocalRepository(MavenExecutionRequest request) throws LocalRepositoryNotAccessibleException {
+    private CloseableSession newCloseableSession(MavenExecutionRequest request, WorkspaceReader workspaceReader) {
+        return repositorySessionFactory
+                .newRepositorySessionBuilder(request)
+                .setWorkspaceReader(workspaceReader)
+                .build();
+    }
+
+    private void validateLocalRepository(MavenExecutionRequest request) throws IOException {
         File localRepoDir = request.getLocalRepositoryPath();
 
-        logger.debug("Using local repository at " + localRepoDir);
+        logger.debug("Using local repository at {}", localRepoDir);
 
         localRepoDir.mkdirs();
 
         if (!localRepoDir.isDirectory()) {
-            throw new LocalRepositoryNotAccessibleException("Could not create local repository at " + localRepoDir);
+            throw new IOException("Could not create local repository at " + localRepoDir);
         }
     }
 
     private <T> Collection<T> getExtensionComponents(Collection<MavenProject> projects, Class<T> role) {
         Collection<T> foundComponents = new LinkedHashSet<>();
-
-        try {
-            foundComponents.addAll(container.lookupList(role));
-        } catch (ComponentLookupException e) {
-            // this is just silly, lookupList should return an empty list!
-            logger.warn("Failed to lookup " + role + ": " + e.getMessage());
-        }
-
+        foundComponents.addAll(lookup.lookupList(role));
         foundComponents.addAll(getProjectScopedExtensionComponents(projects, role));
-
         return foundComponents;
     }
 
     protected <T> Collection<T> getProjectScopedExtensionComponents(Collection<MavenProject> projects, Class<T> role) {
+        if (projects == null) {
+            return Collections.emptyList();
+        }
 
         Collection<T> foundComponents = new LinkedHashSet<>();
         Collection<ClassLoader> scannedRealms = new HashSet<>();
@@ -463,13 +450,7 @@ public class DefaultMaven implements Maven {
 
                 if (projectRealm != null && scannedRealms.add(projectRealm)) {
                     currentThread.setContextClassLoader(projectRealm);
-
-                    try {
-                        foundComponents.addAll(container.lookupList(role));
-                    } catch (ComponentLookupException e) {
-                        // this is just silly, lookupList should return an empty list!
-                        logger.warn("Failed to lookup " + role + ": " + e.getMessage());
-                    }
+                    foundComponents.addAll(lookup.lookupList(role));
                 }
             }
             return foundComponents;
@@ -492,11 +473,13 @@ public class DefaultMaven implements Maven {
                 Prerequisites prerequisites =
                         mavenProject.getModel().getDelegate().getPrerequisites();
                 if (prerequisites != null && prerequisites.getMaven() != null) {
-                    logger.warn("The project " + mavenProject.getId() + " uses prerequisites"
-                            + " which is only intended for maven-plugin projects "
-                            + "but not for non maven-plugin projects. "
-                            + "For such purposes you should use the maven-enforcer-plugin. "
-                            + "See https://maven.apache.org/enforcer/enforcer-rules/requireMavenVersion.html");
+                    logger.warn(
+                            "The project {} uses prerequisites"
+                                    + " which is only intended for maven-plugin projects "
+                                    + "but not for non maven-plugin projects. "
+                                    + "For such purposes you should use the maven-enforcer-plugin. "
+                                    + "See https://maven.apache.org/enforcer/enforcer-rules/requireMavenVersion.html",
+                            mavenProject.getId());
                 }
             }
         }
@@ -508,9 +491,12 @@ public class DefaultMaven implements Maven {
      * @return A {@link Set} of profile identifiers, never {@code null}.
      */
     private Set<String> getAllProfiles(MavenSession session) {
-        final Model superPomModel = superPomProvider.getSuperModel("4.0.0");
+        final Map<String, Model> superPomModels = new HashMap<>();
         final Set<MavenProject> projectsIncludingParents = new HashSet<>();
         for (MavenProject project : session.getProjects()) {
+            superPomModels.computeIfAbsent(
+                    project.getModelVersion(),
+                    v -> superPomProvider.getSuperModel(v).getDelegate());
             boolean isAdded = projectsIncludingParents.add(project);
             MavenProject parent = project.getParent();
             while (isAdded && parent != null) {
@@ -524,8 +510,9 @@ public class DefaultMaven implements Maven {
                 .map(Profile::getId);
         final Stream<String> settingsProfiles =
                 session.getSettings().getProfiles().stream().map(org.apache.maven.settings.Profile::getId);
-        final Stream<String> superPomProfiles =
-                superPomModel.getProfiles().stream().map(Profile::getId);
+        final Stream<String> superPomProfiles = superPomModels.values().stream()
+                .flatMap(p -> p.getProfiles().stream())
+                .map(Profile::getId);
 
         return Stream.of(projectProfiles, settingsProfiles, superPomProfiles)
                 .flatMap(Function.identity())

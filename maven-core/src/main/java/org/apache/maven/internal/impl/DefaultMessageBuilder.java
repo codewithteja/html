@@ -24,106 +24,59 @@ import org.apache.maven.api.services.MessageBuilder;
 
 @Experimental
 public class DefaultMessageBuilder implements MessageBuilder {
-    private final @Nonnull org.apache.maven.shared.utils.logging.MessageBuilder delegate;
 
-    public DefaultMessageBuilder(@Nonnull org.apache.maven.shared.utils.logging.MessageBuilder delegate) {
-        this.delegate = delegate;
+    private final StringBuilder buffer;
+
+    public DefaultMessageBuilder() {
+        this(new StringBuilder());
+    }
+
+    public DefaultMessageBuilder(StringBuilder buffer) {
+        this.buffer = buffer;
     }
 
     @Override
-    @Nonnull
-    public MessageBuilder success(Object o) {
-        delegate.success(o);
+    public MessageBuilder style(String style) {
         return this;
     }
 
     @Override
-    @Nonnull
-    public MessageBuilder warning(Object o) {
-        delegate.warning(o);
+    public MessageBuilder resetStyle() {
         return this;
     }
 
     @Override
-    @Nonnull
-    public MessageBuilder failure(Object o) {
-        delegate.failure(o);
+    public MessageBuilder append(CharSequence cs) {
+        buffer.append(cs);
         return this;
     }
 
     @Override
-    @Nonnull
-    public MessageBuilder strong(Object o) {
-        delegate.strong(o);
+    public MessageBuilder append(CharSequence cs, int start, int end) {
+        buffer.append(cs, start, end);
         return this;
     }
 
     @Override
-    @Nonnull
-    public MessageBuilder mojo(Object o) {
-        delegate.mojo(o);
+    public MessageBuilder append(char c) {
+        buffer.append(c);
         return this;
     }
 
     @Override
-    @Nonnull
-    public MessageBuilder project(Object o) {
-        delegate.project(o);
-        return this;
-    }
-
-    @Override
-    @Nonnull
-    public MessageBuilder a(char[] chars, int i, int i1) {
-        delegate.a(chars, i, i1);
-        return this;
-    }
-
-    @Override
-    @Nonnull
-    public MessageBuilder a(char[] chars) {
-        delegate.a(chars);
-        return this;
-    }
-
-    @Override
-    @Nonnull
-    public MessageBuilder a(CharSequence charSequence, int i, int i1) {
-        delegate.a(charSequence, i, i1);
-        return this;
-    }
-
-    @Override
-    @Nonnull
-    public MessageBuilder a(CharSequence charSequence) {
-        delegate.a(charSequence);
-        return this;
-    }
-
-    @Override
-    @Nonnull
-    public MessageBuilder a(Object o) {
-        delegate.a(o);
-        return this;
-    }
-
-    @Override
-    @Nonnull
-    public MessageBuilder newline() {
-        delegate.newline();
-        return this;
-    }
-
-    @Override
-    @Nonnull
-    public MessageBuilder format(String s, Object... objects) {
-        delegate.format(s, objects);
+    public MessageBuilder setLength(int length) {
+        buffer.setLength(length);
         return this;
     }
 
     @Override
     @Nonnull
     public String build() {
-        return delegate.toString();
+        return buffer.toString();
+    }
+
+    @Override
+    public String toString() {
+        return build();
     }
 }

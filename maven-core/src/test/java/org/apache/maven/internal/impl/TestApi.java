@@ -21,20 +21,30 @@ package org.apache.maven.internal.impl;
 import javax.inject.Inject;
 
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 import org.apache.maven.api.Artifact;
 import org.apache.maven.api.ArtifactCoordinate;
+import org.apache.maven.api.Dependency;
 import org.apache.maven.api.Node;
 import org.apache.maven.api.Project;
+import org.apache.maven.api.ResolutionScope;
 import org.apache.maven.api.Session;
+import org.apache.maven.api.services.DependencyResolver;
+import org.apache.maven.api.services.DependencyResolverResult;
 import org.apache.maven.api.services.ProjectBuilder;
 import org.apache.maven.api.services.ProjectBuilderRequest;
 import org.apache.maven.api.services.SettingsBuilder;
 import org.apache.maven.artifact.handler.manager.ArtifactHandlerManager;
 import org.apache.maven.bridge.MavenRepositorySystem;
 import org.apache.maven.execution.DefaultMavenExecutionRequest;
+import org.apache.maven.execution.DefaultMavenExecutionResult;
 import org.apache.maven.execution.MavenSession;
 import org.apache.maven.execution.scope.internal.MojoExecutionScope;
 import org.apache.maven.repository.internal.MavenRepositorySystemUtils;
@@ -51,11 +61,12 @@ import org.eclipse.aether.repository.RemoteRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @PlexusTest
-public class TestApi {
+class TestApi {
 
     Session session;
 
@@ -96,13 +107,14 @@ public class TestApi {
     void setup() {
         RepositorySystemSession rss = MavenRepositorySystemUtils.newSession();
         DefaultMavenExecutionRequest mer = new DefaultMavenExecutionRequest();
-        MavenSession ms = new MavenSession(null, rss, mer, null);
+        DefaultMavenExecutionResult meres = new DefaultMavenExecutionResult();
+        MavenSession ms = new MavenSession(rss, mer, meres);
         DefaultSession session = new DefaultSession(
                 ms,
                 repositorySystem,
                 Collections.emptyList(),
                 mavenRepositorySystem,
-                plexusContainer,
+                new DefaultLookup(plexusContainer),
                 runtimeInformation);
         DefaultLocalRepository localRepository =
                 new DefaultLocalRepository(new LocalRepository("target/test-classes/apiv4-repo"));
@@ -112,23 +124,67 @@ public class TestApi {
                 .withRemoteRepositories(Collections.singletonList(remoteRepository));
 
         sessionScope.enter();
-        sessionScope.seed(DefaultSession.class, (DefaultSession) this.session);
+        sessionScope.seed(InternalSession.class, InternalSession.from(this.session));
     }
 
     @Test
-    void testCreateAndResolveArtifact() throws Exception {
+    void testCreateAndResolveArtifact() {
         ArtifactCoordinate coord =
                 session.createArtifactCoordinate("org.codehaus.plexus", "plexus-utils", "1.4.5", "pom");
 
-        Artifact resolved = session.resolveArtifact(coord);
-        Optional<Path> op = session.getArtifactPath(resolved);
+        Map.Entry<Artifact, Path> resolved = session.resolveArtifact(coord);
+        assertNotNull(resolved);
+        assertNotNull(resolved.getKey());
+        assertNotNull(resolved.getValue());
+        Optional<Path> op = session.getArtifactPath(resolved.getKey());
         assertTrue(op.isPresent());
-        assertNotNull(op.get());
+        assertEquals(resolved.getValue(), op.get());
+    }
+
+    @Test
+    void testBuildProject() {
+        Artifact artifact = session.createArtifact("org.codehaus.plexus", "plexus-utils", "1.4.5", "pom");
 
         Project project = session.getService(ProjectBuilder.class)
                 .build(ProjectBuilderRequest.builder()
                         .session(session)
-                        .path(op.get())
+                        .path(session.getPathForLocalArtifact(artifact))
+                        .processPlugins(false)
+                        .resolveDependencies(false)
+                        .build())
+                .getProject()
+                .get();
+        assertNotNull(project);
+    }
+
+    @Test
+    void testCollectArtifactDependencies() {
+        Artifact artifact =
+                session.createArtifact("org.codehaus.plexus", "plexus-container-default", "1.0-alpha-32", "jar");
+        Node root = session.collectDependencies(artifact);
+        assertNotNull(root);
+    }
+
+    @Test
+    void testResolveArtifactCoordinateDependencies() {
+        ArtifactCoordinate coord =
+                session.createArtifactCoordinate("org.apache.maven.core.test", "test-extension", "1", "jar");
+
+        List<Path> paths = session.resolveDependencies(session.createDependencyCoordinate(coord));
+
+        assertNotNull(paths);
+        assertEquals(10, paths.size());
+        assertTrue(paths.get(0).getFileName().toString().equals("test-extension-1.jar"));
+    }
+
+    @Test
+    void testProjectDependencies() {
+        Artifact pom = session.createArtifact("org.codehaus.plexus", "plexus-container-default", "1.0-alpha-32", "pom");
+
+        Project project = session.getService(ProjectBuilder.class)
+                .build(ProjectBuilderRequest.builder()
+                        .session(session)
+                        .path(session.getPathForLocalArtifact(pom))
                         .processPlugins(false)
                         .resolveDependencies(false)
                         .build())
@@ -136,9 +192,21 @@ public class TestApi {
                 .get();
         assertNotNull(project);
 
-        Artifact artifact =
-                session.createArtifact("org.codehaus.plexus", "plexus-container-default", "1.0-alpha-32", "jar");
+        Artifact artifact = session.createArtifact("org.apache.maven.core.test", "test-extension", "1", "jar");
         Node root = session.collectDependencies(artifact);
         assertNotNull(root);
+
+        DependencyResolverResult result =
+                session.getService(DependencyResolver.class).resolve(session, project, ResolutionScope.PROJECT_RUNTIME);
+        assertNotNull(result);
+        List<Dependency> deps = new ArrayList<>(result.getDependencies().keySet());
+        List<Dependency> deps2 = result.getNodes().stream()
+                .map(Node::getDependency)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toList());
+        assertEquals(deps, deps2);
+        for (Dependency dep : deps2) {
+            dep.getVersion();
+        }
     }
 }

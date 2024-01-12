@@ -20,50 +20,91 @@ package org.apache.maven.api;
 
 import org.apache.maven.api.annotations.Experimental;
 import org.apache.maven.api.annotations.Immutable;
+import org.apache.maven.api.annotations.Nonnull;
+import org.apache.maven.api.annotations.Nullable;
+import org.apache.maven.api.model.Dependency;
 
 /**
- * An artifact's{@code Type} represents a known kind of artifacts.
- * Such types are often associated to an extension and possibly
- * a classifier, for example {@code java-source} has a {@code jar}
- * extension and a {@code sources} classifier.
- * It is also used to determine if a given dependency should be
- * included in the classpath or if its transitive dependencies should.
+ * A dependency's {@code Type} is uniquely identified by a {@code String},
+ * and semantically represents a known <i>kind</i> of dependency.
+ * <p>
+ * It provides information about the file type (or extension) of the associated artifact,
+ * its default classifier, and how the artifact will be used in the build when creating
+ * classpaths.
+ * <p>
+ * For example, the type {@code java-source} has a {@code jar} extension and a
+ * {@code sources} classifier. The artifact and its dependencies should be added
+ * to the classpath.
  *
- * @since 4.0
+ * @since 4.0.0
  */
 @Experimental
 @Immutable
 public interface Type {
 
-    String POM = "pom";
-    String JAR = "jar";
-    String JAVA_SOURCE = "java-source";
-    String JAVADOC = "javadoc";
-    String MAVEN_PLUGIN = "maven-plugin";
-    String TEST_JAR = "test-jar";
+    String LANGUAGE_NONE = "none";
+    String LANGUAGE_JAVA = "java";
 
     /**
-     * Returns the dependency type name.
+     * Returns the dependency type id.
+     * The id uniquely identifies this <i>dependency type</i>.
      *
-     * @return the type name
+     * @return the id of this type, never {@code null}.
      */
-    String getName();
+    @Nonnull
+    String getId();
 
     /**
-     * Get the file extension associated to the file represented by the dependency type.
+     * Returns the dependency type language.
      *
-     * @return the file extension
+     * @return the language of this type, never {@code null}.
      */
+    String getLanguage();
+
+    /**
+     * Get the file extension of artifacts of this type.
+     *
+     * @return the file extension, never {@code null}.
+     */
+    @Nonnull
     String getExtension();
 
     /**
-     * Get the classifier associated to the dependency type.
+     * Get the default classifier associated to the dependency type.
+     * The default classifier can be overridden when specifying
+     * the {@link Dependency#getClassifier()}.
      *
-     * @return the classifier
+     * @return the default classifier, or {@code null}.
      */
+    @Nullable
     String getClassifier();
 
-    boolean isIncludesDependencies();
+    /**
+     * Specifies if the artifact contains java classes and should be
+     * added to the classpath.
+     *
+     * @return if the artifact should be added to the class path
+     */
+    default boolean isAddedToClassPath() {
+        return getDependencyProperties().checkFlag(DependencyProperties.FLAG_CLASS_PATH_CONSTITUENT);
+    }
 
-    boolean isAddedToClasspath();
+    /**
+     * Specifies if the artifact already embeds its own dependencies.
+     * This is the case for JEE packages or similar artifacts such as
+     * WARs, EARs, etc.
+     *
+     * @return if the artifact's dependencies are included in the artifact
+     */
+    default boolean isIncludesDependencies() {
+        return getDependencyProperties().checkFlag(DependencyProperties.FLAG_INCLUDES_DEPENDENCIES);
+    }
+
+    /**
+     * Gets the default properties associated with this dependency type.
+     *
+     * @return the default properties, never {@code null}.
+     */
+    @Nonnull
+    DependencyProperties getDependencyProperties();
 }

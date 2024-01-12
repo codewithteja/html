@@ -24,19 +24,18 @@ import java.util.List;
 import java.util.Optional;
 
 import org.apache.maven.api.Artifact;
-import org.apache.maven.api.Node;
 import org.apache.maven.api.Project;
 import org.apache.maven.api.RemoteRepository;
-import org.apache.maven.api.ResolutionScope;
 import org.apache.maven.api.Service;
 import org.apache.maven.api.Session;
 import org.apache.maven.api.annotations.Experimental;
 import org.apache.maven.api.annotations.Nonnull;
+import org.apache.maven.api.model.Resource;
 
 /**
  * Interface to manage the project during its lifecycle.
  *
- * @since 4.0
+ * @since 4.0.0
  */
 @Experimental
 public interface ProjectManager extends Service {
@@ -77,11 +76,18 @@ public interface ProjectManager extends Service {
 
     void addTestCompileSourceRoot(Project project, String sourceRoot);
 
+    List<Resource> getResources(Project project);
+
+    void addResource(Project project, Resource resource);
+
+    List<Resource> getTestResources(Project project);
+
+    void addTestResource(Project project, Resource resource);
+
     List<RemoteRepository> getRepositories(Project project);
 
-    List<Artifact> getResolvedDependencies(Project project, ResolutionScope scope);
-
-    Node getCollectedDependencies(Project project, ResolutionScope scope);
-
     void setProperty(Project project, String key, String value);
+
+    @Nonnull
+    Optional<Project> getExecutionProject(@Nonnull Project project);
 }

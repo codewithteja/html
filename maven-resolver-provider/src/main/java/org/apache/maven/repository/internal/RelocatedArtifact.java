@@ -26,7 +26,6 @@ import org.eclipse.aether.artifact.AbstractArtifact;
 import org.eclipse.aether.artifact.Artifact;
 
 /**
- * @author Benjamin Bentmann
  */
 public final class RelocatedArtifact extends AbstractArtifact {
 
@@ -36,19 +35,32 @@ public final class RelocatedArtifact extends AbstractArtifact {
 
     private final String artifactId;
 
+    private final String classifier;
+
+    private final String extension;
+
     private final String version;
 
     private final String message;
 
-    RelocatedArtifact(Artifact artifact, String groupId, String artifactId, String version, String message) {
+    public RelocatedArtifact(
+            Artifact artifact,
+            String groupId,
+            String artifactId,
+            String classifier,
+            String extension,
+            String version,
+            String message) {
         this.artifact = Objects.requireNonNull(artifact, "artifact cannot be null");
-        // TODO Use StringUtils here
-        this.groupId = (groupId != null && groupId.length() > 0) ? groupId : null;
-        this.artifactId = (artifactId != null && artifactId.length() > 0) ? artifactId : null;
-        this.version = (version != null && version.length() > 0) ? version : null;
-        this.message = (message != null && message.length() > 0) ? message : null;
+        this.groupId = (groupId != null && !groupId.isEmpty()) ? groupId : null;
+        this.artifactId = (artifactId != null && !artifactId.isEmpty()) ? artifactId : null;
+        this.classifier = (classifier != null && !classifier.isEmpty()) ? classifier : null;
+        this.extension = (extension != null && !extension.isEmpty()) ? extension : null;
+        this.version = (version != null && !version.isEmpty()) ? version : null;
+        this.message = (message != null && !message.isEmpty()) ? message : null;
     }
 
+    @Override
     public String getGroupId() {
         if (groupId != null) {
             return groupId;
@@ -57,6 +69,7 @@ public final class RelocatedArtifact extends AbstractArtifact {
         }
     }
 
+    @Override
     public String getArtifactId() {
         if (artifactId != null) {
             return artifactId;
@@ -65,6 +78,25 @@ public final class RelocatedArtifact extends AbstractArtifact {
         }
     }
 
+    @Override
+    public String getClassifier() {
+        if (classifier != null) {
+            return classifier;
+        } else {
+            return artifact.getClassifier();
+        }
+    }
+
+    @Override
+    public String getExtension() {
+        if (extension != null) {
+            return extension;
+        } else {
+            return artifact.getExtension();
+        }
+    }
+
+    @Override
     public String getVersion() {
         if (version != null) {
             return version;
@@ -80,7 +112,7 @@ public final class RelocatedArtifact extends AbstractArtifact {
         if (current.equals(version) || (version == null && current.length() <= 0)) {
             return this;
         }
-        return new RelocatedArtifact(artifact, groupId, artifactId, version, message);
+        return new RelocatedArtifact(artifact, groupId, artifactId, classifier, extension, version, message);
     }
 
     @Override
@@ -89,7 +121,8 @@ public final class RelocatedArtifact extends AbstractArtifact {
         if (Objects.equals(current, file)) {
             return this;
         }
-        return new RelocatedArtifact(artifact.setFile(file), groupId, artifactId, version, message);
+        return new RelocatedArtifact(
+                artifact.setFile(file), groupId, artifactId, classifier, extension, version, message);
     }
 
     @Override
@@ -98,25 +131,21 @@ public final class RelocatedArtifact extends AbstractArtifact {
         if (current.equals(properties) || (properties == null && current.isEmpty())) {
             return this;
         }
-        return new RelocatedArtifact(artifact.setProperties(properties), groupId, artifactId, version, message);
+        return new RelocatedArtifact(
+                artifact.setProperties(properties), groupId, artifactId, classifier, extension, version, message);
     }
 
-    public String getClassifier() {
-        return artifact.getClassifier();
-    }
-
-    public String getExtension() {
-        return artifact.getExtension();
-    }
-
+    @Override
     public File getFile() {
         return artifact.getFile();
     }
 
+    @Override
     public String getProperty(String key, String defaultValue) {
         return artifact.getProperty(key, defaultValue);
     }
 
+    @Override
     public Map<String, String> getProperties() {
         return artifact.getProperties();
     }

@@ -24,6 +24,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
+import org.apache.maven.internal.impl.DefaultLookup;
 import org.apache.maven.lifecycle.DefaultLifecycles;
 import org.apache.maven.lifecycle.Lifecycle;
 import org.codehaus.plexus.PlexusContainer;
@@ -34,7 +35,6 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 /**
- * @author Kristian Rosenvold
  */
 public class DefaultLifecyclesStub {
     public static DefaultLifecycles createDefaultLifecycles() throws ComponentLookupException {
@@ -71,6 +71,6 @@ public class DefaultLifecyclesStub {
         PlexusContainer mockedContainer = mock(PlexusContainer.class);
         when(mockedContainer.lookupMap(Lifecycle.class)).thenReturn(lifeCycles);
 
-        return new DefaultLifecycles(mockedContainer);
+        return new DefaultLifecycles(new DefaultLookup(mockedContainer));
     }
 }

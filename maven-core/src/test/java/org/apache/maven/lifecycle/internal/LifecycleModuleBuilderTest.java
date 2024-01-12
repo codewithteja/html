@@ -44,12 +44,12 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
 @PlexusTest
-public class LifecycleModuleBuilderTest {
+class LifecycleModuleBuilderTest {
     @Inject
     PlexusContainer container;
 
     @Test
-    public void testCurrentProject() throws Exception {
+    void testCurrentProject() throws Exception {
         List<MavenProject> currentProjects = new ArrayList<>();
         MojoExecutorStub mojoExecutor = new MojoExecutorStub() {
             @Override
@@ -65,7 +65,10 @@ public class LifecycleModuleBuilderTest {
         mavenExecutionRequest.setExecutionListener(new AbstractExecutionListener());
         mavenExecutionRequest.setGoals(Arrays.asList("clean"));
         final MavenSession session = new MavenSession(
-                null, new DefaultRepositorySystemSession(), mavenExecutionRequest, defaultMavenExecutionResult);
+                null,
+                new DefaultRepositorySystemSession(h -> false),
+                mavenExecutionRequest,
+                defaultMavenExecutionResult);
         final ProjectDependencyGraphStub dependencyGraphStub = new ProjectDependencyGraphStub();
         session.setProjectDependencyGraph(dependencyGraphStub);
         session.setProjects(dependencyGraphStub.getSortedProjects());
