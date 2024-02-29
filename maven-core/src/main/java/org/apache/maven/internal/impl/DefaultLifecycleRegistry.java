@@ -156,6 +156,7 @@ public class DefaultLifecycleRegistry
         phase.phases().forEach(child -> addPhase(graph, ep1, ep2, child));
     }
 
+    @Named
     static class LifecycleWrapperProvider implements LifecycleProvider {
         private final Map<String, org.apache.maven.lifecycle.Lifecycle> lifecycles;
 
