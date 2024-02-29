@@ -32,6 +32,7 @@ import org.apache.maven.api.spi.LifecycleProvider;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.*;
+import static java.util.Collections.emptyList;
 import static org.apache.maven.internal.impl.Lifecycles.*;
 
 /**
@@ -59,7 +60,7 @@ public class DefaultLifecycleRegistry
         // validate lifecycle
         for (Lifecycle lifecycle : this) {
             Set<String> set = new HashSet<>();
-            lifecycle.phases().forEach(phase -> {
+            lifecycle.allPhases().forEach(phase -> {
                 if (!set.add(phase.name())) {
                     throw new IllegalArgumentException(
                             "Found duplicated phase '" + phase.name() + "' in '" + lifecycle.id() + "' lifecycle");
@@ -87,7 +88,72 @@ public class DefaultLifecycleRegistry
 
     @Override
     public List<String> computePhases(Lifecycle lifecycle) {
-        return lifecycle.phases().stream().map(Lifecycle.Phase::name).toList();
+        Graph graph = new Graph();
+        lifecycle.phases().forEach(phase -> addPhase(graph, null, null, phase));
+        lifecycle.aliases().forEach(alias -> {
+            String n = alias.v3Phase();
+            String a = alias.v4Phase();
+            String[] u = a.split(":");
+            Graph.Vertex v = graph.addVertex(n);
+            if (u.length > 1) {
+                if ("pre".equals(u[0])) {
+                    graph.addEdge(graph.addVertex("$" + u[1]), v);
+                    graph.addEdge(v, graph.addVertex("$$" + u[1]));
+                } else if ("post".equals(u[0])) {
+                    graph.addEdge(graph.addVertex(u[1]), v);
+                    graph.addEdge(v, graph.addVertex("$$$" + u[1]));
+                }
+            } else {
+                graph.addEdge(graph.addVertex("$$" + u[0]), v);
+                graph.addEdge(v, graph.addVertex(u[0]));
+            }
+        });
+        List<String> allPhases = graph.visitAll();
+        Collections.reverse(allPhases);
+        List<String> computed =
+                allPhases.stream().filter(s -> !s.startsWith("$")).collect(Collectors.toList());
+        List<String> given = lifecycle.orderedPhases().orElse(null);
+        if (given != null) {
+            if (given.size() != computed.size()) {
+                Set<String> s1 =
+                        given.stream().filter(s -> !computed.contains(s)).collect(Collectors.toSet());
+                Set<String> s2 =
+                        computed.stream().filter(s -> !given.contains(s)).collect(Collectors.toSet());
+                throw new IllegalArgumentException(
+                        "List of phases differ in size: expected " + computed.size() + " but received " + given.size()
+                                + (s1.isEmpty() ? "" : ", missing " + s1)
+                                + (s2.isEmpty() ? "" : ", unexpected " + s2));
+            }
+            return given;
+        }
+        return computed;
+    }
+
+    private static void addPhase(
+            Graph graph, Graph.Vertex before, Graph.Vertex after, org.apache.maven.api.Lifecycle.Phase phase) {
+        Graph.Vertex ep0 = graph.addVertex("$" + phase.name());
+        Graph.Vertex ep1 = graph.addVertex("$$" + phase.name());
+        Graph.Vertex ep2 = graph.addVertex(phase.name());
+        Graph.Vertex ep3 = graph.addVertex("$$$" + phase.name());
+        graph.addEdge(ep0, ep1);
+        graph.addEdge(ep1, ep2);
+        graph.addEdge(ep2, ep3);
+        if (before != null) {
+            graph.addEdge(before, ep0);
+        }
+        if (after != null) {
+            graph.addEdge(ep3, after);
+        }
+        phase.links().forEach(link -> {
+            if (link.pointer().type() == Lifecycle.Pointer.Type.PROJECT) {
+                if (link.kind() == Lifecycle.Link.Kind.AFTER) {
+                    graph.addEdge(graph.addVertex(link.pointer().phase()), ep0);
+                } else {
+                    graph.addEdge(ep3, graph.addVertex("$" + link.pointer().phase()));
+                }
+            }
+        });
+        phase.phases().forEach(child -> addPhase(graph, ep1, ep2, child));
     }
 
     static class LifecycleWrapperProvider implements LifecycleProvider {
@@ -115,6 +181,11 @@ public class DefaultLifecycleRegistry
                     // TODO: implement
                     throw new UnsupportedOperationException();
                 }
+
+                @Override
+                public Collection<Alias> aliases() {
+                    return Collections.emptyList();
+                }
             };
         }
     }
@@ -134,11 +205,17 @@ public class DefaultLifecycleRegistry
                     phase("pre-clean"),
                     phase(
                             "clean",
+                            after("pre-clean"),
                             plugin(
                                     "org.apache.maven.plugins:maven-clean-plugin:" + MAVEN_CLEAN_PLUGIN_VERSION
                                             + ":clean",
                                     "clean")),
-                    phase("post-clean"));
+                    phase("post-clean", after("clean")));
+        }
+
+        @Override
+        public Collection<Alias> aliases() {
+            return emptyList();
         }
     }
 
@@ -152,28 +229,33 @@ public class DefaultLifecycleRegistry
         public Collection<Phase> phases() {
             return asList(
                     phase("validate"),
-                    phase("initialize"),
-                    phase("generate-sources"),
-                    phase("process-sources"),
-                    phase("generate-resources"),
-                    phase("process-resources"),
-                    phase("compile"),
-                    phase("process-classes"),
-                    phase("generate-test-sources"),
-                    phase("process-test-sources"),
-                    phase("generate-test-resources"),
-                    phase("process-test-resources"),
-                    phase("test-compile"),
-                    phase("process-test-classes"),
-                    phase("test"),
-                    phase("prepare-package"),
-                    phase("package"),
-                    phase("pre-integration-test"),
-                    phase("integration-test"),
-                    phase("post-integration-test"),
-                    phase("verify"),
-                    phase("install"),
-                    phase("deploy"));
+                    phase("initialize", after("validate")),
+                    phase("generate-sources", after("initialize")),
+                    phase("process-sources", after("generate-sources")),
+                    phase("generate-resources", after("process-sources")),
+                    phase("process-resources", after("generate-resources")),
+                    phase("compile", after("process-resources")),
+                    phase("process-classes", after("compile")),
+                    phase("generate-test-sources", after("process-classes")),
+                    phase("process-test-sources", after("generate-test-sources")),
+                    phase("generate-test-resources", after("process-test-sources")),
+                    phase("process-test-resources", after("generate-test-resources")),
+                    phase("test-compile", after("process-test-resources")),
+                    phase("process-test-classes", after("test-compile")),
+                    phase("test", after("process-test-classes")),
+                    phase("prepare-package", after("test")),
+                    phase("package", after("prepare-package")),
+                    phase("pre-integration-test", after("package")),
+                    phase("integration-test", after("pre-integration-test")),
+                    phase("post-integration-test", after("integration-test")),
+                    phase("verify", after("post-integration-test")),
+                    phase("install", after("verify")),
+                    phase("deploy", after("install")));
+        }
+
+        @Override
+        public Collection<Alias> aliases() {
+            return emptyList();
         }
     }
 
@@ -192,16 +274,23 @@ public class DefaultLifecycleRegistry
                     phase("pre-site"),
                     phase(
                             "site",
+                            after("pre-site"),
                             plugin(
                                     "org.apache.maven.plugins:maven-site-plugin:" + MAVEN_SITE_PLUGIN_VERSION + ":site",
                                     "site")),
-                    phase("post-site"),
+                    phase("post-site", after("site")),
                     phase(
                             "site-deploy",
+                            after("post-site"),
                             plugin(
                                     "org.apache.maven.plugins:maven-site-plugin:" + MAVEN_SITE_PLUGIN_VERSION
                                             + ":deploy",
                                     "site-deploy")));
+        }
+
+        @Override
+        public Collection<Alias> aliases() {
+            return emptyList();
         }
     }
 
@@ -222,6 +311,11 @@ public class DefaultLifecycleRegistry
                             "org.apache.maven.plugins:maven-wrapper-plugin:" + MAVEN_WRAPPER_PLUGIN_VERSION
                                     + ":wrapper",
                             "wrapper")));
+        }
+
+        @Override
+        public Collection<Alias> aliases() {
+            return emptyList();
         }
     }
 }
