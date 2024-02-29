@@ -16,50 +16,51 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.apache.maven.api;
+package org.apache.maven.api.plugin.annotations;
 
-import java.util.Optional;
+import java.lang.annotation.Documented;
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Inherited;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
 
 import org.apache.maven.api.annotations.Experimental;
-import org.apache.maven.api.annotations.Immutable;
-import org.apache.maven.api.annotations.Nonnull;
-import org.apache.maven.api.model.PluginContainer;
 
 /**
- * Interface representing a Maven project packaging.
- * <p>
- * TODO: define how to plug in new packaging definitions using the SPI.
- *   the packaging are currently defined by Maven 3 {@code Provider<LifecycleMapping>}
+ * Specifies that the mojo should be run after the specific phase.
  *
  * @since 4.0.0
  */
 @Experimental
-@Immutable
-public interface Packaging extends ExtensibleEnum {
-    /**
-     * The packaging id.
-     */
-    @Nonnull
-    String id();
+@Documented
+@Retention(RetentionPolicy.RUNTIME)
+@Target(ElementType.TYPE)
+@Inherited
+public @interface After {
 
     /**
-     * The language of this packaging.
+     * Type of pointer.
+     * @see org.apache.maven.api.Lifecycle.Pointer.Type
      */
-    @Nonnull
-    default Language language() {
-        return getType().getLanguage();
+    enum Type {
+        Project,
+        Dependencies,
+        Children
     }
 
     /**
-     * The type of main artifact produced by this packaging.
+     * The phase name.
      */
-    @Nonnull
-    Type getType();
+    String phase();
 
     /**
-     * Returns the binding to use specifically for this packaging.
-     * This will be merged to the default packaging definition.
+     * The type of this pointer.
      */
-    @Nonnull
-    Optional<PluginContainer> getPlugins();
+    Type type();
+
+    /**
+     * The scope for dependencies, only if {@code type() == Type.Dependencies}.
+     */
+    String scope() default "";
 }

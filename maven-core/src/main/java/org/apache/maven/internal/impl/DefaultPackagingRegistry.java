@@ -22,13 +22,16 @@ import javax.inject.Inject;
 import javax.inject.Named;
 import javax.inject.Singleton;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
 import org.apache.maven.api.Packaging;
 import org.apache.maven.api.Type;
+import org.apache.maven.api.model.PluginContainer;
 import org.apache.maven.api.services.PackagingRegistry;
 import org.apache.maven.api.services.TypeRegistry;
+import org.apache.maven.api.spi.PackagingProvider;
 import org.apache.maven.lifecycle.mapping.LifecycleMapping;
 
 /**
@@ -36,13 +39,20 @@ import org.apache.maven.lifecycle.mapping.LifecycleMapping;
  */
 @Named
 @Singleton
-public class DefaultPackagingRegistry implements PackagingRegistry {
+public class DefaultPackagingRegistry
+        extends ExtensibleEnumRegistries.DefaultExtensibleEnumRegistry<Packaging, PackagingProvider>
+        implements PackagingRegistry {
+
     private final Map<String, LifecycleMapping> lifecycleMappings;
 
     private final TypeRegistry typeRegistry;
 
     @Inject
-    public DefaultPackagingRegistry(Map<String, LifecycleMapping> lifecycleMappings, TypeRegistry typeRegistry) {
+    public DefaultPackagingRegistry(
+            Map<String, LifecycleMapping> lifecycleMappings,
+            TypeRegistry typeRegistry,
+            List<PackagingProvider> providers) {
+        super(providers);
         this.lifecycleMappings = lifecycleMappings;
         this.typeRegistry = typeRegistry;
     }
@@ -67,6 +77,12 @@ public class DefaultPackagingRegistry implements PackagingRegistry {
             @Override
             public Type getType() {
                 return type;
+            }
+
+            @Override
+            public Optional<PluginContainer> getPlugins() {
+                // TODO: wrap lifecycleMapping
+                return Optional.empty();
             }
         });
     }
