@@ -242,6 +242,7 @@ public class MojoExecutor {
                     warn(msg);
                     acquiredAggregatorLock.lock();
                 }
+                /*
                 if (!acquiredProjectLock.tryLock()) {
                     Thread owner = acquiredProjectLock.getOwner();
                     MojoDescriptor ownerMojo = owner != null ? mojos.get(owner) : null;
@@ -254,6 +255,7 @@ public class MojoExecutor {
                     warn(msg);
                     acquiredProjectLock.lock();
                 }
+                */
             } else {
                 acquiredAggregatorLock = null;
                 acquiredProjectLock = null;
@@ -264,7 +266,7 @@ public class MojoExecutor {
         public void close() {
             // release the lock in the reverse order of the acquisition
             if (acquiredProjectLock != null) {
-                acquiredProjectLock.unlock();
+                // acquiredProjectLock.unlock();
             }
             if (acquiredAggregatorLock != null) {
                 acquiredAggregatorLock.unlock();

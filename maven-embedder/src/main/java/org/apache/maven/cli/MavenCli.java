@@ -1323,7 +1323,7 @@ public class MavenCli {
         // parameters but this is sufficient for now. Ultimately we want components like Builders to provide a way to
         // extend the command line to accept its own configuration parameters.
         //
-        final String threadConfiguration = commandLine.getOptionValue(CLIManager.THREADS);
+        final String threadConfiguration = commandLine.getOptionValue(CLIManager.THREADS, "1C");
 
         if (threadConfiguration != null) {
             int degreeOfConcurrency = calculateDegreeOfConcurrency(threadConfiguration);
@@ -1336,7 +1336,7 @@ public class MavenCli {
         //
         // Allow the builder to be overridden by the user if requested. The builders are now pluggable.
         //
-        request.setBuilderId(commandLine.getOptionValue(CLIManager.BUILDER, request.getBuilderId()));
+        request.setBuilderId(commandLine.getOptionValue(CLIManager.BUILDER, "concurrent"));
 
         return request;
     }
