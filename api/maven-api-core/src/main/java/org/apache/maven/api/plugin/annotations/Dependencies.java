@@ -30,21 +30,22 @@ import org.apache.maven.api.annotations.Experimental;
  * Indicates that a given field will be injected with the result of
  * a dependency collection or resolution request. Whether a collection
  * or resolution request is performed is controlled by the {@link #pathScope()}
- * field.
+ * field, the injected field type and the {@link #requestType()}.
  * <p>
- * If a collection request is to be done, the type of the field annotated with
- * this annotation can be either <ul>
- * <li>a {@link org.apache.maven.api.services.DependencyCollectorResult DependencyCollectorResult},</li>
- * <li>or a {@link org.apache.maven.api.Node Node} object.</li>
- * </ul>
- * <p>
- * If a resolution request is to be done, the type of the annotated field can be either <ul>
- * <li>a {@link org.apache.maven.api.services.DependencyResolverResult DependencyResolverResult},</li>
- * <li>a {@code List<}{@link org.apache.maven.api.Node Node}{@code >},</li>
- * <li>a {@code List<}{@link java.nio.file.Path Path}{@code >},</li>
- * <li>a {@code Map<}{@link org.apache.maven.api.PathType PathType}{@code , List<}{@link java.nio.file.Path Path}{@code >>},</li>
- * <li>or a {@code Map<}{@link org.apache.maven.api.Dependency Dependency}{@code , }{@link java.nio.file.Path Path}{@code >}.</li>
- * </ul>
+ * If the {@code requestType} is not set explicitly, it will be inferred
+ * from the {@code pathScope} and the injected field type. If the type
+ * is {@link org.apache.maven.api.Node Node} and {@code pathScope == ""},
+ * then the dependencies will be <i>collected</i>.
+ * If the type is {@link org.apache.maven.api.Node Node} or
+ * {@code List<}{@link org.apache.maven.api.Node Node}{@code >},
+ * and {@code pathScope != ""}, the dependencies will be <i>flattened</i>.
+ * Else the dependencies will be <i>resolved</i> and {@code pathScope} must be non empty,
+ * and the field type can be {@link org.apache.maven.api.Node Node},
+ * {@code List<}{@link org.apache.maven.api.Node Node}{@code >},
+ * {@link org.apache.maven.api.services.DependencyResolverResult DependencyResolverResult},
+ * {@code List<}{@link java.nio.file.Path Path}{@code >},
+ * {@code Map<}{@link org.apache.maven.api.PathType PathType}{@code , List<}{@link java.nio.file.Path Path}{@code >>},
+ * or {@code Map<}{@link org.apache.maven.api.Dependency Dependency}{@code , }{@link java.nio.file.Path Path}{@code >}.
  *
  * @since 4.0.0
  */
@@ -62,4 +63,12 @@ public @interface Dependencies {
      * @return the id of the path scope
      */
     String pathScope() default "";
+
+    /**
+     * The request type, in case the default one is not correct.
+     * Valid values are {@code collect}, {@code flatten}, or {@code resolve}.
+     *
+     * @return the request type
+     */
+    String requestType() default "";
 }

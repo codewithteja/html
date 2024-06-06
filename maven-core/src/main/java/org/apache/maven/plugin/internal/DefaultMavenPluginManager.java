@@ -42,8 +42,6 @@ import org.apache.maven.api.PathType;
 import org.apache.maven.api.Project;
 import org.apache.maven.api.Session;
 import org.apache.maven.api.plugin.descriptor.Dependencies;
-import org.apache.maven.api.services.DependencyCollector;
-import org.apache.maven.api.services.DependencyCollectorResult;
 import org.apache.maven.api.services.DependencyResolver;
 import org.apache.maven.api.services.DependencyResolverResult;
 import org.apache.maven.api.services.PathScopeRegistry;
@@ -614,8 +612,6 @@ public class DefaultMavenPluginManager implements MavenPluginManager {
                         sessionV4.getService(DependencyResolver.class).resolve(sessionV4, project, ps);
                 if (field.getType() == DependencyResolverResult.class) {
                     result = res;
-                } else if (field.getType() == DependencyCollectorResult.class) {
-                    result = res;
                 } else if (field.getType() == Node.class) {
                     result = res.getRoot();
                 } else if (field.getType() == List.class && field.getGenericType() instanceof ParameterizedType pt) {
@@ -639,9 +635,9 @@ public class DefaultMavenPluginManager implements MavenPluginManager {
                 }
             } else {
                 // collection
-                DependencyCollectorResult res =
-                        sessionV4.getService(DependencyCollector.class).collect(sessionV4, project);
-                if (field.getType() == DependencyCollectorResult.class) {
+                DependencyResolverResult res =
+                        sessionV4.getService(DependencyResolver.class).collect(sessionV4, project);
+                if (field.getType() == DependencyResolverResult.class) {
                     result = res;
                 } else if (field.getType() == Node.class) {
                     result = res.getRoot();

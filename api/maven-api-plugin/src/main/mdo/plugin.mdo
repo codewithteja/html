@@ -607,7 +607,14 @@ under the License.
           <required>false</required>
           <version>2.0.0+</version>
           <type>String</type>
-          <description>pathScope to resolve dependencies, else will collect dependencies</description>
+          <description>pathScope used to flatten dependencies</description>
+        </field>
+        <field>
+          <name>requestType</name>
+          <required>false</required>
+          <version>2.0.0+</version>
+          <type>String</type>
+          <description>either {@code collect}, {@code flatten}, or {@code resolve}</description>
         </field>
       </fields>
     </class>

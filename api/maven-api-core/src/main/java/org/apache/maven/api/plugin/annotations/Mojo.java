@@ -94,4 +94,22 @@ public @interface Mojo {
      */
     @Nonnull
     String configurator() default "";
+
+    /**
+     * Indicates whether dependency collection will be
+     * required when executing the Mojo.
+     * If not set, it will be inferred from the fields
+     * annotated with the {@link Dependencies} annotation.
+     */
+    @Nonnull
+    boolean dependencyCollection() default false;
+
+    /**
+     * Comma separated list of path scopes that will be
+     * required for dependency resolution.
+     * If not set, it will be inferred from the fields
+     * annotated with the {@link Dependencies} annotation.
+     */
+    @Nonnull
+    String dependencyResolutionPathScopes() default "";
 }
